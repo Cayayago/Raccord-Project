@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/parent/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/parent/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rc01-ms-auth/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rc02-ms-projects/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rc03-ms-continuidad/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rc04-ms-actores/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rc05-ms-gateway/src/main/java" charset="UTF-8" />
+  </component>
+</project>
