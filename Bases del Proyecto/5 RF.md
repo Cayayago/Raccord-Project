@@ -26,7 +26,8 @@ Si base de datos está vacía (primer usuario):
 - Crear proyecto inicial automáticamente
 - Asignar usuario como Administrador Total del proyecto
 - Enviar email de confirmación
-- Activar cuenta automáticamente.
+- Activar cuenta automáticamente (sin espera de 48 horas)
+
 Si ya existen usuarios:
 
 - Deshabilitar auto-registro
@@ -42,7 +43,7 @@ Si ya existen usuarios:
 
 **Precondiciones**:
 
-- Base de datos de usuarios debe estar vacía para ese proyecto.
+- Base de datos de usuarios debe estar vacía (0 usuarios registrados)
 - Sistema debe estar desplegado y accesible
 
 **Postcondiciones**:
@@ -56,9 +57,58 @@ Si ya existen usuarios:
 
 **Dependencias**: Ninguna (es el primer requisito funcional del sistema)
 
+### RF-002: Usuarios Administradores Pre-cargados por Desarrolladores
 
-### RF-002: Registro de Usuarios Adicionales por Administrador Total
-**Descripción**: El sistema debe permitir a usuarios con rol "Administrador Total" registrar nuevos usuarios en la plataforma, asignándoles un rol específico dentro de la jerarquía de producción audiovisual y vinculándolos a uno o más proyectos activos. Este requisito aplica después de que el primer administrador ya existe.
+**Descripción**: El sistema debe permitir que los desarrolladores de Raccord pre-carguen uno o más usuarios con rol "Administrador Total" durante el despliegue inicial del sistema, proporcionando credenciales al cliente para que tome control inmediato de la plataforma.
+
+**Prioridad**: Crítica
+
+**Entradas (provistas por desarrolladores durante despliegue)**:
+
+- Nombre del administrador
+- Apellido del administrador
+- Email del administrador
+- Teléfono del administrador
+- Contraseña temporal (generada por desarrolladores)
+- Nombre del proyecto inicial
+
+**Proceso**:
+
+- Desarrolladores ejecutan script de inicialización durante despliegue
+- Script crea usuario(s) administrador directamente en base de datos
+- Contraseña temporal se hashea con bcrypt
+- Usuario se crea con rol "Administrador Total" y estado "Activo"
+- Proyecto inicial se crea automáticamente
+- Usuario se vincula al proyecto
+- Desarrolladores entregan credenciales al cliente mediante canal seguro (email cifrado, documento impreso)
+- Cliente debe cambiar contraseña temporal en primer login
+
+**Salidas**:
+
+- Usuario(s) Administrador Total creado(s) en base de datos
+- Proyecto inicial creado
+- Credenciales entregadas al cliente
+- Registro en log del sistema
+
+**Precondiciones**:
+
+- Sistema desplegado en infraestructura cloud
+- Script de inicialización desarrollado y testeado
+- Cliente ha proporcionado datos del administrador inicial
+
+**Postcondiciones**:
+
+- Cliente recibe credenciales y puede acceder inmediatamente
+- Auto-registro queda deshabilitado (ya existe al menos 1 usuario)
+- Usuario administrador debe cambiar contraseña en primer login
+
+**Actores**: Desarrolladores de Raccord (durante despliegue) Y Cliente (Productor de Línea) recibe credenciales
+
+**Dependencias**: Infraestructura desplegada y funcional
+
+
+### RF-003: Registro de Usuarios Adicionales por Administrador Total
+**Descripción**: El sistema debe permitir a usuarios con rol "Administrador Total" registrar nuevos usuarios en la plataforma, asignándoles un rol específico dentro de la jerarquía de producción audiovisual y vinculándolos a uno o más proyectos activos. Este requisito aplica después de que el primer administrador ya existe (vía RF-001 o RF-002).
 
 **Prioridad**: Crítica
 
@@ -78,6 +128,7 @@ Si ya existen usuarios:
 - Generar contraseña temporal aleatoria (12 caracteres: 1 mayúscula, 1 minúscula, 1 número, 1 carácter especial)
 - Crear registro de usuario con estado "Inactivo"
 - Enviar email con credenciales y enlace de activación
+- Establecer expiración de activación en 48 horas
 - Registrar acción en log de auditoría (quién creó el usuario, cuándo, con qué rol)
 
 **Salidas**:
@@ -98,10 +149,10 @@ Usuario nuevo queda registrado en estado "Inactivo" hasta activación. Si el usu
 
 **Actores**: Administrador Total (Productor de Línea, Jefe de Producción)
 
-**Dependencias**: RF-001 (debe existir al menos un Administrador Total)
+**Dependencias**: RF-001 o RF-002 (debe existir al menos un Administrador Total)
 
 
-### RF-003: Inicio de Sesión con Autenticación de Dos Factores
+### RF-004: Inicio de Sesión con Autenticación de Dos Factores
 **Descripción**: El sistema debe permitir a usuarios registrados iniciar sesión validando credenciales (email + contraseña) y requiriendo posteriormente autenticación de dos factores (2FA) mediante código TOTP de 6 dígitos enviado al canal elegido por el usuario.
 
 **Prioridad**: Crítica
@@ -110,28 +161,33 @@ Usuario nuevo queda registrado en estado "Inactivo" hasta activación. Si el usu
 - Email del usuario
 - Contraseña
 - Código 2FA de 6 dígitos
-- Canal preferido para 2FA (Email)
+- Canal preferido para 2FA (Email o SMS)
 
 **Proceso**:
 - Validar email y contraseña contra base de datos
 - Si las credenciales son incorrectas: registrar intento fallido y mostrar error genérico ("Email o contraseña incorrectos")
 - Si 3 intentos fallidos consecutivos: bloquear cuenta temporalmente (15 minutos)
+- Si credenciales correctas: generar código TOTP de 6 dígitos
 - Enviar código al canal seleccionado por usuario
-- Validar código ingresado (válido por 5 minutos)
+- Validar código ingresado (válido por 2 minutos)
 - Si código es incorrecto 3 veces: bloquear cuenta temporalmente (15 minutos)
+- Si es código correcto: generar token JWT (válido 2 horas) y refresh token (válido 7 días)
 - Registrar acceso exitoso en log de auditoría (timestamp, IP origen, dispositivo, resultado)
 
 **Salidas**:
+- Token JWT de autenticación (access token, válido 2 horas)
+- Refresh token para renovación automática (válido 7 días)
 - Redirección a página principal según rol del usuario
 - Registro en log de auditoría: timestamp, IP origen, dispositivo, resultado
 
 **Precondiciones**:
-- Usuario debe estar registrado en el sistema (RF-001, o RF-002)
+- Usuario debe estar registrado en el sistema (RF-001, RF-002 o RF-003)
 - Usuario debe estar en estado "Activo"
-- Usuario debe haber activado su cuenta (si fue registrado por RF-002)
+- Usuario debe haber activado su cuenta (si fue registrado por RF-003)
 
 **Postcondiciones**:
 
+- Sesión activa con token JWT válido por 2 horas
 - Usuario puede acceder a módulos según su rol
 - Registro de acceso exitoso en tabla LOG de auditoría
 
@@ -139,11 +195,11 @@ Usuario nuevo queda registrado en estado "Inactivo" hasta activación. Si el usu
 
 Dependencias:
 
-RF-001 o RF-002 (Usuario debe estar registrado)
+RF-001 o RF-002 o RF-003 (Usuario debe estar registrado)
 
 
-### RF-004: Sistema de Notificaciones por Email
-**Descripción**: El sistema debe proveer servicio de envío de notificaciones a usuarios mediante email para eventos críticos (activación de cuenta, código 2FA, recuperación de contraseña, cambios de calendario, comunicados oficiales).
+### RF-005: Sistema de Notificaciones por Email y SMS
+**Descripción**: El sistema debe proveer servicio de envío de notificaciones a usuarios mediante email y SMS para eventos críticos (activación de cuenta, código 2FA, recuperación de contraseña, cambios de calendario, comunicados oficiales).
 
 **Prioridad**: Crítica
 
@@ -154,10 +210,10 @@ RF-001 o RF-002 (Usuario debe estar registrado)
 - Prioridad (Normal/Urgente/Crítica)
 
 **Proceso**:
-- Validar destinatario (formato de email)
+- Validar destinatario (formato de email o teléfono)
 - Seleccionar plantilla según tipo de notificación
 - Generar contenido dinámico (nombre usuario, código, enlace, etc.)
-- Enviar mediante correo la notificación.
+- Enviar mediante servicio de terceros: Email: SendGrid, AWS SES o similar / SMS: Twilio, AWS SNS o similar
 
 
 - Si envío falla: reintentar hasta 3 veces con delay exponencial (1s, 2s, 4s)
@@ -178,22 +234,23 @@ RF-001 o RF-002 (Usuario debe estar registrado)
 - Notificación entregada en menos de 60 segundos (RNF aplicable)
 - Registro de entrega guardado para auditoría
 
-**Actores**: Sistema (envío automático de mails) 
+**Actores**: Sistema (envío automático) y servicio de terceros (SendGrid, Twilio)
 
 **Dependencias**:
 
-- Integración con proveedor de email.
+- Integración con proveedor de email (SendGrid, AWS SES)
+- Integración con proveedor de SMS (Twilio, AWS SNS)
 
 
-### RF-005: Sistema de Roles y Permisos Granulares (RBAC)
-**Descripción**: El sistema debe implementar control de acceso basado en roles (RBAC) con 4 roles predefinidos, cada uno con permisos granulares específicos sobre los 3 módulos principales (Continuidad Visual, Comunicación, Guiones).
+### RF-006: Sistema de Roles y Permisos Granulares (RBAC)
+**Descripción**: El sistema debe implementar control de acceso basado en roles (RBAC) con 7 roles predefinidos, cada uno con permisos granulares específicos sobre los 4 módulos principales (Continuidad Visual, Calendario, Comunicación, Guiones).
 
 **Prioridad**: Crítica
 
 **Entradas**:
-- Rol asignado al usuario (definido en RF-001, RF-002)
-- Acción solicitada por usuario (ej: subir fotografía, editar plan de rodaje, ver guion)
-- Módulo al que intenta acceder (Continuidad Visual/plan de rodaje/Comunicación/Guiones)
+- Rol asignado al usuario (definido en RF-001, RF-002 o RF-003)
+- Acción solicitada por usuario (ej: subir fotografía, editar calendario, ver guion)
+- Módulo al que intenta acceder (Continuidad Visual/Calendario/Comunicación/Guiones)
 
 **Proceso**:
 
@@ -212,7 +269,7 @@ RF-001 o RF-002 (Usuario debe estar registrado)
 
 **Precondiciones**:
 
-- Usuario debe estar autenticado (RF-003)
+- Usuario debe estar autenticado (RF-004)
 - Usuario debe tener rol asignado
 
 **Postcondiciones** : Acción ejecutada si el permiso existe y registro de intento (exitoso o fallido) en log de auditoría
@@ -221,11 +278,11 @@ RF-001 o RF-002 (Usuario debe estar registrado)
 
 **Dependencias**:
 
-RF-003 (Usuario autenticado)
+RF-004 (Usuario autenticado)
 
 Nota Crítica: El sistema debe validar que siempre exista al menos 1 usuario con rol "Administrador Total" activo. No se puede eliminar o cambiar rol del último Administrador Total.
 
-### RF-006: Política de Contraseñas Seguras
+### RF-007: Política de Contraseñas Seguras
 **Descripción**: El sistema debe validar y enforcar una política de contraseñas seguras para todos los usuarios en registro inicial, cambio de contraseña y recuperación de contraseña.
 
 **Prioridad**: Alta
@@ -253,7 +310,7 @@ Nota Crítica: El sistema debe validar que siempre exista al menos 1 usuario con
 - Mensaje de confirmación o error específico al usuario
 - Registro en log de cambio de contraseña (no almacena contraseña, solo evento)
 
-**Precondiciones**: Usuario debe estar en proceso de registro (RF-001, RF-002) o cambio de contraseña (RF-007)
+**Precondiciones**: Usuario debe estar en proceso de registro (RF-001, RF-003) o cambio de contraseña (RF-008)
 
 **Postcondiciones**:
 
@@ -267,7 +324,7 @@ Nota Crítica: El sistema debe validar que siempre exista al menos 1 usuario con
 Ninguna (política aplicable en múltiples RF)
 
 
-### RF-007: Recuperación de Contraseña
+### RF-008: Recuperación de Contraseña
 **Descripción**: El sistema debe permitir a usuarios que olvidaron su contraseña solicitar un restablecimiento mediante enlace de recuperación enviado a su email registrado.
 
 **Prioridad**: Alta
@@ -279,13 +336,17 @@ Ninguna (política aplicable en múltiples RF)
 
 **Proceso**:
 - Validar que email exista en base de datos
-- Enviar email con enlace de recuperación.
+- Generar token único de recuperación UUID (válido por 1 hora)
+- Enviar email con enlace de recuperación (incluye token en URL)
 - Usuario hace clic en enlace
+- Sistema valida token (existencia, validez temporal, que no haya sido usado)
+- Si token válido: mostrar formulario de nueva contraseña
 - Usuario ingresa nueva contraseña (2 veces para confirmación)
-- Aplicar validaciones de RF-006 (Política de contraseñas)
+- Aplicar validaciones de RF-007 (Política de contraseñas)
 - Validar que nueva contraseña NO sea igual a las últimas 3
 - Hashear nueva contraseña con bcrypt (12 rounds)
 - Actualizar contraseña en base de datos
+- Invalidar token de recuperación (marcarlo como usado)
 - Cerrar todas las sesiones activas del usuario
 - Enviar email de confirmación de cambio exitoso
 
@@ -305,17 +366,17 @@ Ninguna (política aplicable en múltiples RF)
 
 - Contraseña antigua queda invalidada
 - Usuario debe iniciar sesión nuevamente con nueva contraseña
-- Enlace de recuperación queda invalidado (no reutilizable)
+- Token de recuperación queda invalidado (no reutilizable)
 
 **Actores**: Cualquier usuario registrado que olvidó su contraseña
 
 **Dependencias**:
 
-- RF-004 (Sistema de notificaciones por email)
-- RF-006 (Política de contraseñas seguras)
+- RF-005 (Sistema de notificaciones por email)
+- RF-007 (Política de contraseñas seguras)
 
 
-### RF-008: Gestión de Perfil de Usuario
+### RF-009: Gestión de Perfil de Usuario
 **Descripción**: El sistema debe permitir a usuarios actualizar su información personal (datos de contacto, preferencias de notificación, foto de perfil) excepto datos críticos que solo puede modificar un Administrador Total.
 
 **Prioridad**: Media
@@ -329,21 +390,23 @@ Ninguna (política aplicable en múltiples RF)
 
 **Proceso**:
 
-- Validar que usuario esté autenticado.
+- Validar que usuario esté autenticado (token JWT válido)
 - Mostrar formulario con datos actuales pre-cargados
 - Usuario modifica campos editables
 - Validar formato de teléfono si se proporciona
 - Validar formato (JPG/PNG) y tamaño (<2 MB) de foto si se sube
 - Comprimir foto a resolución óptima (500x500px) manteniendo calidad
 - Actualizar solo campos modificados en base de datos
+- Registrar cambio en log de auditoría (qué campos cambió, cuándo)
 
 **Salidas**:
 
 - Información de perfil actualizada en base de datos
 - Foto de perfil almacenada en storage (S3 o equivalente)
 - Mensaje de confirmación al usuario
+- Registro en log de auditoría
 
-**Precondiciones**: Usuario debe estar autenticado (RF-003) y el usuario debe tener sesión activa
+**Precondiciones**: Usuario debe estar autenticado (RF-004) y el usuario debe tener sesión activa
 
 **Postcondiciones**:
 
@@ -352,7 +415,7 @@ Ninguna (política aplicable en múltiples RF)
 
 **Actores**: Todos los usuarios registrados
 
-**Dependencias**: RF-003 (Usuario autenticado)
+**Dependencias**: RF-004 (Usuario autenticado)
 
 Campos NO Editables por Usuario:
 
@@ -363,7 +426,7 @@ Campos NO Editables por Usuario:
 - Proyectos asignados (solo Administrador Total puede cambiar)
 
 
-### RF-009: Log de Auditoría de Accesos y Acciones
+### RF-010: Log de Auditoría de Accesos y Acciones
 **Descripción**: El sistema debe registrar automáticamente en una tabla LOG todos los eventos de seguridad y acciones críticas realizadas por usuarios para garantizar trazabilidad completa.
 
 **Prioridad**: Alta
@@ -397,6 +460,7 @@ Campos NO Editables por Usuario:
 **Postcondiciones**:
 
 - Evento queda registrado permanentemente en log
+- Administradores pueden consultar log mediante RF-052 (Reporte de Auditoría)
 
 **Actores**:
 
@@ -411,6 +475,8 @@ Eventos Registrados:
 - Visualización de fotografías de continuidad
 - Visualización de guiones
 - Subida de fotografías
+- Modificación de calendario
+- Envío de comunicados oficiales
 - Exportación de reportes
 - Cambios de roles/permisos
 - Revocación de accesos
@@ -418,13 +484,13 @@ Eventos Registrados:
 
 
 ## GESTIÓN DE FOTOGRAFÍAS DE CONTINUIDAD
-### RF-010: Carga de Fotografías
+### RF-011: Carga de Fotografías con Metadatos Estructurados
 **Descripción**: El sistema debe permitir a usuarios autorizados (Script, Jefes de Departamento, Asistentes Onset) cargar fotografías de continuidad desde dispositivos móviles o tablets, completando campos de metadatos obligatorios en el momento de la subida.
 
 **Prioridad**: Crítica
 
 **Entradas**:
-- Archivo de fotografía (JPG/PNG máx 10 MB)
+- Archivo de fotografía (JPG/PNG/HEIC, máx 10 MB)
 - Proyecto (selección de proyectos activos del usuario)
 - Episodio (texto, máx 20 caracteres, opcional si no aplica)
 - Número de Escena (número entero)
@@ -436,13 +502,14 @@ Eventos Registrados:
 
 **Proceso**:
 - Validar que usuario tenga permiso para subir fotografías (según RF-006)
-- Validar formato de archivo (JPG/PNG)
+- Validar formato de archivo (JPG/PNG/HEIC)
 - Validar tamaño de archivo (<10 MB)
 - Si archivo >10 MB: comprimir automáticamente a 85% calidad manteniendo resolución
 - Generar nomenclatura estandarizada automáticamente: "PROYECTO_EPISODIO_ESCENA_TOMA_PERSONAJE_DETALLE_VERSION"
 - Si ya existe fotografía con misma nomenclatura: incrementar VERSION (V1 → V2)
-- Aplicar marca de agua dinámica con: nombre usuario, timestamp, nombre
+- Aplicar marca de agua dinámica con: nombre usuario, timestamp, nombre proyecto
 - Almacenar imagen original (sin marca de agua) en storage seguro (S3 o equivalente)
+- Guardar metadatos en base de datos PostgreSQL
 - Registrar acción en log de auditoría (RF-010)
 - Si modo offline: almacenar localmente y sincronizar al reconectar
 
@@ -465,6 +532,7 @@ Eventos Registrados:
 
 - Fotografía disponible inmediatamente para búsqueda (RF-012)
 - Fotografía visible para usuarios autorizados según su rol
+- Si Estado = "Error a Corregir": notificación push enviada a Jefe de Departamento correspondiente
 
 **Actores**:
 
@@ -478,10 +546,9 @@ Eventos Registrados:
 - RF-006 (Sistema de roles y permisos)
 - RF-010 (Log de auditoría)
 
-### RF-011: Generación Automática de Nomenclatura
+### RF-012: Generación Automática de Nomenclatura Estandarizada
 **Descripción**: El sistema debe generar automáticamente una nomenclatura única y estandarizada para cada fotografía de continuidad siguiendo el formato definido, garantizando consistencia y facilitando búsqueda posterior.
-
-**Prioridad**: Media
+**Prioridad**: Crítica
 
 **Entradas**:
 
@@ -528,8 +595,8 @@ Ejemplo de nomenclatura generada:
 **Dependencias**: RF-011 (Carga de fotografías)
 
 
-### RF-012: Búsqueda Avanzada por Filtros
-**Descripción**: El sistema debe permitir a usuarios autorizados buscar fotografías de continuidad mediante filtros múltiples (individuales o combinados) con resultados devueltos en menos de 10 segundos (Tiempo que se busca).
+### RF-013: Búsqueda Avanzada por Múltiples Criterios
+**Descripción**: El sistema debe permitir a usuarios autorizados buscar fotografías de continuidad mediante filtros múltiples (individuales o combinados) con resultados devueltos en menos de 10 segundos incluso con bases de datos de más de 10,000 fotografías.
 
 **Prioridad**: Crítica
 
@@ -587,8 +654,70 @@ Ejemplo de nomenclatura generada:
 - RF-011 (Fotografías deben estar cargadas)
 
 
-### RF-013: Comparación Visual Lado a Lado
-**Descripción**: El sistema debe permitir comparar hasta 2 fotografías simultáneamente en vista lado a lado con zoom sincronizado para detectar inconsistencias visuales entre tomas de una misma escena.
+### RF-014: Visualización de Fotografías en Alta Resolución
+**Descripción**: El sistema debe permitir visualizar fotografías en resolución completa (hasta 10 MB) con funcionalidades de zoom, rotación, navegación secuencial y visualización de metadatos completos.
+
+**Prioridad**: Crítica
+
+**Entradas**:
+- Fotografía seleccionada desde RF-013 (Búsqueda)
+- Acciones del usuario: Zoom in/out, Rotación, Navegación anterior/siguiente
+
+**Proceso**:
+
+- Validar que usuario tenga permiso para visualizar fotografía según su rol
+- Cargar imagen de alta resolución desde storage (S3 o equivalente)
+- Aplicar marca de agua dinámica en tiempo real (nombre usuario, timestamp, proyecto)
+- Mostrar imagen en visor con controles:
+
+        Zoom progresivo: pinch en móvil, scroll en desktop, botones +/-
+        Rotación: botones 90°, 180°, 270°
+        Navegación secuencial: flechas anterior/siguiente
+        Pantalla completa: botón fullscreen
+
+- Mostrar metadatos al lado de la imagen:
+
+        Nomenclatura completa
+        Personaje(s)
+        Tipo de Detalle
+        Estado de Continuidad
+        Fecha de rodaje
+        Usuario que subió la fotografía
+        Comentarios
+        Historial de versiones (si existen V2, V3...)
+
+
+- Permitir a Jefes de Departamento añadir comentarios específicos
+- Registrar visualización en log de auditoría (RF-010)
+
+**Salidas**:
+
+- Imagen visualizada en alta resolución con marca de agua
+- Metadatos completos mostrados
+- Registro de visualización en log de auditoría
+
+**Precondiciones**:
+
+- Usuario debe estar autenticado (RF-004)
+- Fotografía debe existir en sistema (RF-011)
+- Usuario debe tener permiso según su rol (RF-006)
+
+**Postcondiciones**:
+
+- Usuario visualizó fotografía con todos los detalles
+- Visualización queda registrada en auditoría
+- Marca de agua impide descarga no autorizada
+
+**Actores**: Todos los usuarios autorizados según su rol
+
+**Dependencias**:
+
+- RF-004 (Autenticación)
+- RF-006 (Sistema de roles)
+- RF-010 (Log de auditoría)
+
+### RF-015: Comparación Visual Lado a Lado
+**Descripción**: El sistema debe permitir comparar hasta 4 fotografías simultáneamente en vista lado a lado con zoom sincronizado para detectar inconsistencias visuales entre tomas de una misma escena.
 
 **Prioridad**: Alta
 
@@ -634,8 +763,66 @@ Ejemplo de nomenclatura generada:
 - RF-006 (Sistema de roles)
 - RF-013 (Búsqueda de fotografías)
 
-### RF-014: Gestión de Estados de Continuidad
-**Descripción**: El sistema debe permitir al Script marcar cada fotografía con uno de tres estados de continuidad (OK, Pendiente, Corregir) y enviar notificaciones automáticas al departamento correspondiente cuando se marca un error.
+### RF-016: Historial de Versiones de Fotografías
+
+**Descripción**: El sistema debe mantener historial completo de todas las versiones de una misma fotografía (mismo Proyecto_Episodio_Escena_Toma_Personaje_Detalle) permitiendo visualizar, comparar y restaurar versiones anteriores.
+
+**Prioridad**: Media
+
+**Entradas**:
+
+- Fotografía seleccionada (cualquier versión)
+- Acción del usuario: Ver historial, Comparar versiones, Restaurar versión anterior
+
+**Proceso**:
+
+- Al subir fotografía nueva con nomenclatura existente (RF-011): sistema detecta duplicado y crea versión V2, V3, etc.
+- Versión anterior se marca como "histórica" pero NO se elimina
+- Mostrar botón "Ver Historial" en visualización de fotografía (RF-014)
+- Listar todas las versiones en orden cronológico inverso (más reciente primero):
+
+        Nomenclatura con versión (V1, V2, V3...)
+        Fecha y hora de subida
+        Usuario que subió
+        Comentarios de la versión
+
+
+- Permitir comparar versión actual vs versión anterior (usar RF-015)
+- Solo Script puede restaurar versión anterior:
+
+        Versión anterior se marca como "Actual"
+        Versión actual se marca como "Histórica"
+        Se registra restauración en log de auditoría
+
+
+**Salidas**:
+
+- Lista de versiones históricas de fotografía
+- Comparación visual entre versiones
+- Versión restaurada (si Script ejecuta restauración)
+- Registro de restauración en log de auditoría
+
+**Precondiciones**:
+
+- Debe existir al menos 1 fotografía en el sistema
+- Para restaurar: usuario debe ser Script
+
+**Postcondiciones**:
+
+- Historial completo de fotografía es visible
+- Versiones antiguas NO se eliminan (trazabilidad completa)
+
+**Actores**: Todos los usuarios pueden ver historial y solo el Script puede restaurar versiones anteriores.
+
+**Dependencias**:
+
+- RF-011 (Carga de fotografías con versionado)
+- RF-014 (Visualización de fotografías)
+- RF-015 (Comparación)
+
+
+### RF-017: Gestión de Estados de Continuidad
+**Descripción**: El sistema debe permitir al Script marcar cada fotografía con uno de tres estados de continuidad (OK, Pendiente, Error a Corregir) y enviar notificaciones automáticas al departamento correspondiente cuando se marca un error.
 
 **Prioridad**: Alta
 
@@ -688,12 +875,12 @@ Ejemplo de nomenclatura generada:
 
 **Dependencias**:
 
-- RF-010 (Fotografías deben existir)
-- RF-009 (Log de auditoría)
+- RF-011 (Fotografías deben existir)
+- RF-010 (Log de auditoría)
 
 
-### RF-015: Marca de Agua Dinámica No Removible
-**Descripción**: El sistema debe aplicar marca de agua dinámica en tiempo real (superpuesta, NO incrustada en archivo original) a todas las fotografías y guiones descargados para proteger contenido confidencial y garantizar trazabilidad.
+### RF-018: Marca de Agua Dinámica No Removible
+**Descripción**: El sistema debe aplicar marca de agua dinámica en tiempo real (superpuesta, NO incrustada en archivo original) a todas las fotografías y guiones visualizados para proteger contenido confidencial y garantizar trazabilidad.
 
 **Prioridad**: Crítica
 
@@ -713,6 +900,7 @@ Ejemplo de nomenclatura generada:
 - Marca de agua debe incluir:
 
         Nombre completo del usuario que visualiza
+        Timestamp de visualización (formato: DD/MM/YYYY HH:MM:SS)
         Nombre del proyecto
 
 
@@ -725,15 +913,15 @@ Ejemplo de nomenclatura generada:
         Se repite múltiples veces en diagonal sobre la imagen
 
 
-- En aplicaciones móviles (iOS/Android): deshabilitar capturas de pantalla.
+- En aplicaciones móviles (iOS/Android): deshabilitar capturas de pantalla a nivel de OS
 - En aplicación web: deshabilitar click derecho y atajos de teclado (Ctrl+S, Ctrl+P, PrtScr)
-- Si usuario intenta exportar (solo roles autorizados): aplicar marca de agua.
+- Si usuario intenta exportar (solo roles autorizados): aplicar marca de agua reforzada multipunto
 
 **Salidas**:
 
 - Imagen/documento con marca de agua visible
 - Archivo original sin marca permanece intacto en storage
-- Registro de visualización en log de auditoría (RF-009)
+- Registro de visualización en log de auditoría (RF-010)
 
 **Precondiciones**:
 
@@ -750,11 +938,62 @@ Ejemplo de nomenclatura generada:
 
 **Dependencias**:
 
-- RF-013 (Visualización de fotografías)
+- RF-014 (Visualización de fotografías)
 - Librería de procesamiento de imágenes (Pillow para Python)
 
 
-## RF-016: Análisis Automático de Imágenes con IA
+### RF-019: Fotografías Grupales de Extras con Etiquetado Múltiple
+**Descripción**: El sistema debe permitir subir fotografías de grupos de extras con campos específicos para identificar número total de personas, descripción del grupo y tablero de comando visible.
+
+**Prioridad**: Media
+
+**Entradas**:
+
+- Archivo de fotografía grupal (JPG/PNG, máx 10 MB)
+- Metadatos estándar (Proyecto, Episodio, Escena, Toma)
+- Número total de extras en la foto (número entero)
+- Descripción del grupo (texto, máx 100 caracteres, ej: "Grupo 1 - Bar Izquierda")
+- Tablero de comando visible: Sí/No
+- Detalles del tablero (si visible): Escena, Interior/Exterior, Locación, Hora ficticia
+
+**Proceso**:
+
+- Validar que usuario tenga permiso para subir fotografías (Script, Jefe de Vestuario, Asistente Onset)
+- Validar formato y tamaño de archivo
+- Si fotografía es grupal (indicado por usuario): habilitar campos adicionales específicos
+Generar nomenclatura adaptada: PROYECTO_EPISODIO_ESCENA_TOMA_EXTRAS_GRUPO#_V1
+
+        Ejemplo: RACCORD_EP01_ESC008_T01_EXTRAS_GRUPO1_V1.jpg
+
+- Almacenar fotografía con metadatos extendidos
+- Marcar fotografía como "Grupal" en base de datos para filtrado posterior
+- Aplicar marca de agua dinámica
+- Permitir búsqueda específica por fotografías grupales
+
+**Salidas**:
+
+- Fotografía grupal almacenada con metadatos extendidos
+- Nomenclatura específica para fotografías de extras
+- Filtro adicional en búsqueda: "Solo fotografías grupales"
+
+**Precondiciones**:
+- Usuario debe tener permiso para subir fotografías
+- Escena debe tener extras registrados
+
+**Postcondiciones**:
+
+- Fotografía grupal disponible para consulta
+- Extras identificados por grupo para continuidad
+
+**Actores**: Script, Jefe de Vestuario, Asistente Onset
+
+**Dependencias**:
+
+- RF-011 (Carga de fotografías)
+- RF-013 (Búsqueda debe incluir filtro de fotografías grupales)
+
+
+## RF-020: Análisis Automático de Imágenes con IA
 **Descripción**: El sistema debe ejecutar análisis automático de fotografías mediante inteligencia artificial al momento de subir (procesamiento en background) detectando elementos clave de continuidad con precisión mínima del 80%.
 
 **Prioridad**: Media
@@ -796,7 +1035,7 @@ Ejemplo de nomenclatura generada:
 
 **Precondiciones**:
 
-- Fotografía debe estar almacenada en sistema (RF-010)
+- Fotografía debe estar almacenada en sistema (RF-011)
 - Modelo de AI debe estar desplegado y accesible
 
 
@@ -804,7 +1043,7 @@ Ejemplo de nomenclatura generada:
 
 - Etiquetas sugeridas disponibles para Script
 - Análisis NO retrasa subida de fotografía (background)
-- Precisión objetivo: ≥80% 
+- Precisión objetivo: ≥80% (Objetivo Específico 2)
 
 **Actores**:
 
@@ -813,10 +1052,10 @@ Ejemplo de nomenclatura generada:
 
 **Dependencias**:
 
-- RF-010 (Carga de fotografías)
+- RF-011 (Carga de fotografías)
 
 
-### RF-017: Detección Automática de Inconsistencias entre Tomas
+### RF-021: Detección Automática de Inconsistencias entre Tomas
 **Descripción**: El sistema debe comparar automáticamente fotografías de múltiples tomas de una misma escena y generar alertas si detecta diferencias significativas (>20% de cambio) en elementos clave.
 
 **Prioridad**: Media
@@ -832,9 +1071,16 @@ Umbral de diferencia: 20% (configurable por administrador)
         Encolar tarea de comparación en background
         Cargar fotografías desde storage
 
-        Aplicar técnicas de comparación visual
+        Aplicar técnicas de comparación visual:
+            Perceptual Hashing (pHash) para similitud general
+            Structural Similarity Index (SSIM) para cambios estructurales
+            Detección de objetos con YOLOv8 en ambas imágenes
 
-        Comparar listas de objetos detectados
+        Comparar listas de objetos detectados:
+            Objetos presentes en Toma 1 pero ausentes en Toma 2
+            Objetos ausentes en Toma 1 pero presentes en Toma 2
+            Cambios significativos de color (>30% de diferencia en tonalidad)
+            Cambios significativos de posición (>20% de desplazamiento)
 
 - Si diferencia detectada >20%:
 
@@ -849,7 +1095,7 @@ Umbral de diferencia: 20% (configurable por administrador)
 
 
 - Script puede: Validar (marcar como OK, es intencional), Descartar (falso positivo), Marcar como "Error a Corregir"
-- Si se marca "Error a Corregir": ejecutar RF-014 (notificar a departamento)
+- Si se marca "Error a Corregir": ejecutar RF-017 (notificar a departamento)
 
 **Salidas**:
 
@@ -871,12 +1117,13 @@ Umbral de diferencia: 20% (configurable por administrador)
 
 **Dependencias**:
 
-- RF-010 (Fotografías cargadas)
-- RF-016 (Análisis de IA)
+- RF-011 (Fotografías cargadas)
+- RF-020 (Análisis de IA)
+- RF-017 (Gestión de estados)
 - Librerías: OpenCV, imagehash, scikit-image
 
 
-### RF-018: Eliminación Lógica de Fotografías (Papelera)
+### RF-022: Eliminación Lógica de Fotografías (Papelera)
 **Descripción**: El sistema debe permitir al Script eliminar fotografías, pero en lugar de borrarlas permanentemente, moverlas a una papelera de reciclaje durante 30 días antes de eliminación definitiva.
 
 **Prioridad**: Media
@@ -894,13 +1141,15 @@ Umbral de diferencia: 20% (configurable por administrador)
             NO eliminar archivo de storage
             Marcar registro en base de datos con estado "Eliminado" y timestamp de eliminación
             Mover fotografía a sección "Papelera" visible solo para Script y Administrador Total
+            Fotografía ya NO aparece en búsquedas normales (RF-013)
             Configurar eliminación automática definitiva en 30 días
             Registrar eliminación en log de auditoría
 
 - Script y Administrador Total pueden:
 
         Ver papelera con fotografías eliminadas
-        Restaurar fotografía
+        Restaurar fotografía (vuelve a estado activo, aparece en búsquedas)
+        Eliminar definitivamente antes de 30 días (requiere confirmación adicional)
 
 - Tras 30 días: proceso automático elimina permanentemente fotografía de storage y base de datos
 
@@ -928,13 +1177,13 @@ Umbral de diferencia: 20% (configurable por administrador)
 
 **Dependencias**:
 
-- RF-010 (Fotografías deben existir)
-- RF-009 (Log de auditoría)
+- RF-011 (Fotografías deben existir)
+- RF-010 (Log de auditoría)
 - Cron job para eliminación automática tras 30 días
 
 ## GESTIÓN DE CALENDARIO Y PLANEACIÓN
-### RF-019: Creación de Proyectos
-**Descripción**: El sistema debe permitir a Administradores Totales crear proyectos nuevos con información básica que servirá como contenedor para todas las fotografías, guiones y desglose y plan de rodaje de esa producción específica.
+### RF-023: Creación de Proyectos
+**Descripción**: El sistema debe permitir a Administradores Totales crear proyectos nuevos con información básica que servirá como contenedor para todas las fotografías, guiones y calendario de esa producción específica.
 
 **Prioridad**: Crítica
 
@@ -951,8 +1200,14 @@ Umbral de diferencia: 20% (configurable por administrador)
 - Validar que usuario sea Administrador Total
 - Validar que nombre de proyecto no esté duplicado
 - Crear registro de proyecto en base de datos con estado "Activo"
-- Generar ID único de proyecto
-- Crear automáticamente estructuras base
+- Generar ID único de proyecto (UUID)
+- Crear automáticamente estructuras base:
+
+        Directorio en storage para fotografías del proyecto
+        Directorio para guiones
+        Calendario vacío
+        Plantilla de roles predefinida
+
 - Asignar creador como Administrador Total del proyecto
 - Registrar creación en log de auditoría
 
