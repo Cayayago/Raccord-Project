@@ -478,55 +478,118 @@ Eventos Registrados:
 - RF-006 (Sistema de roles y permisos)
 - RF-010 (Log de auditoría)
 
-### RF-011: Generación Automática de Nomenclatura
-**Descripción**: El sistema debe generar automáticamente una nomenclatura única y estandarizada para cada fotografía de continuidad siguiendo el formato definido, garantizando consistencia y facilitando búsqueda posterior.
+### RF-012 Gestión de Nomenclatura y Versionado de Fotografías
 
-**Prioridad**: Media
+**Descripción**
 
-**Entradas**:
+El sistema debe generar automáticamente una nomenclatura única y estandarizada para cada fotografía de continuidad, y gestionar el versionado completo de las mismas, permitiendo mantener un historial detallado, visualizar, comparar y restaurar versiones anteriores sin pérdida de información.
 
-- Metadatos ingresados en RF-011 (Proyecto, Episodio, Escena, Toma, Personaje, Detalle)
-- Fotografías existentes en base de datos para detectar duplicados
+**Prioridad**
+Crítica (por nomenclatura) + Media (por historial) → Alta
 
-**Proceso**: Extraer valores de metadatos:
-- *PROYECTO*: nombre del proyecto sin espacios, máx 20 caracteres
-- *EPISODIO*: número de episodio con formato EP## (ej: EP01, EP12), "NA" si no aplica
-- *ESCENA*: número de escena con formato ESC### (ej: ESC001, ESC045)
-- *TOMA*: número de toma con formato T## (ej: T01, T15)
-- *PERSONAJE*: nombre del personaje sin espacios, máx 15 caracteres
-- *DETALLE*: abreviatura del tipo (VEST, MAQ, UTIL, SET, OTRO)
-- *VERSION*: V1, V2, V3... (autoincremental) 
-- Generar string: PROYECTO_EPISODIO_ESCENA_TOMA_PERSONAJE_DETALLE_VERSION
-- Buscar en base de datos si ya existe nomenclatura idéntica (excluyendo VERSION)
-- Si existe: incrementar VERSION automáticamente (V1 → V2 → V3...)
-- Si no existe: asignar V1
-- Asignar nomenclatura generada como nombre único de archivo
+**Entradas**
 
-Ejemplo de nomenclatura generada:
+- Metadatos de fotografía:
+  - Proyecto  
+  - Episodio  
+  - Escena  
+  - Toma  
+  - Personaje  
+  - Detalle  
 
-    RACCORD_EP01_ESC005_T02_MARIA_VEST_V1.jpg 
-    RACCORD_EP01_ESC005_T03_MARIA_VEST_V1.jpg
-    RACCORD_EP01_ESC005_T02_MARIA_MAQ_V1.jpg
-    RACCORD_EP01_ESC005_T02_MARIA_VEST_V2.jpg (versión actualizada)
+- Fotografía cargada  
+- Fotografías existentes en base de datos  
 
-**Salidas**:
+- Acción del usuario:
+  - Ver historial  
+  - Comparar versiones  
+  - Restaurar versión (solo Script)  
 
--Nomenclatura única generada
-- Archivo renombrado automáticamente con nomenclatura
-- Nomenclatura almacenada en campo "filename" de base de datos
+**Proceso**
 
-**Precondiciones**: Metadatos obligatorios deben estar completos (validado en RF-011)
+#### Generación de nomenclatura automática
 
-**Postcondiciones**:
+- Extraer y formatear metadatos:
+  - PROYECTO: generar automáticamente, dependiendo en el proyecto que este ubicado (Incluido ID_Project)
+  - EPISODIO: formato EP## o NA  
+  - ESCENA: ESC###  
+  - TOMA: T##  
+  - PERSONAJE: sin espacios, máx 15 caracteres  
+  - DETALLE: VEST, MAQ, UTIL, SET, OTRO  
+  - VERSION: autoincremental (V1, V2, V3...)  
 
-- Fotografía tiene nombre único y estandarizado
-- Nomenclatura permite búsqueda eficiente (RF-013)
-- Versiones de una misma fotografía son fácilmente identificables
+- Generar nomenclatura:
 
-**Actores**: Sistema (proceso automático)
+- Validar en base de datos:
+  - Si existe misma nomenclatura base → incrementar versión  
+  - Si no existe → asignar V1  
 
-**Dependencias**: RF-011 (Carga de fotografías)
+- Renombrar automáticamente el archivo con la nomenclatura generada  
 
+#### estión de versionado
+
+- Si se carga una fotografía con misma nomenclatura base:
+  - Crear nueva versión (V2, V3…)  
+  - Marcar versión anterior como Histórica  
+  - Mantener todas las versiones (NO eliminar)  
+
+#### Visualización de historial
+
+- Mostrar botón "Ver Historial"  
+- Listar versiones en orden cronológico inverso:
+  - Nomenclatura completa  
+  - Fecha y hora  
+  - Usuario  
+  - Comentarios  
+
+
+#### Comparación de versiones
+
+- Permitir comparar versiones (actual vs anterior)  
+- Integración con RF-015  
+
+
+#### Restauración de versiones
+
+- Solo el actor Script puede restaurar:
+  - Versión seleccionada → Actual  
+  - Versión actual → Histórica  
+
+- Registrar acción en log de auditoría  
+
+
+**Salidas**
+
+- Nomenclatura única generada  
+- Archivo renombrado automáticamente  
+- Historial completo de versiones  
+- Comparación visual entre versiones  
+- Versión restaurada (si aplica)  
+- Registro en log de auditoría  
+
+**Precondiciones**
+- Metadatos completos (RF-011)  
+- Debe existir al menos una fotografía para historial  
+- Para restauración: actor debe ser Script  
+
+
+**Postcondiciones**
+- Todas las fotografías tienen nomenclatura única  
+- Historial completo disponible (trazabilidad total)  
+- Versiones anteriores NO se eliminan  
+- Búsqueda eficiente por nomenclatura  
+
+
+**Actores**
+
+- Usuarios: visualizar historial y comparar  
+- Script: restaurar versiones  
+- Sistema: generar nomenclatura y versionado automático  
+
+
+**Dependencias**
+
+- RF-010: Carga de fotografías  
 
 ### RF-012: Búsqueda Avanzada por Filtros
 **Descripción**: El sistema debe permitir a usuarios autorizados buscar fotografías de continuidad mediante filtros múltiples (individuales o combinados) con resultados devueltos en menos de 10 segundos (Tiempo que se busca).
