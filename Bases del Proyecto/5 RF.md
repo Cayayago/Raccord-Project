@@ -963,7 +963,7 @@ Ejemplo de nomenclatura generada:
 - Si fotografía es grupal (indicado por usuario): habilitar campos adicionales específicos
 Generar nomenclatura adaptada: PROYECTO_EPISODIO_ESCENA_TOMA_EXTRAS_GRUPO#_V1
 
-        Ejemplo: RACCORD_EP01_ESC008_T01_EXTRAS_GRUPO1_V1.jpg
+        Ejemplo: RACCORD_EP01_ESC008_T01_EXTRAS_GRUPO1_V1.jpgs
 
 - Almacenar fotografía con metadatos extendidos
 - Marcar fotografía como "Grupal" en base de datos para filtrado posterior
